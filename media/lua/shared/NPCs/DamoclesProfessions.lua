@@ -18,7 +18,7 @@ local function initDamoclesProfessions()
     local prof = ProfessionFactory.addProfession(
         "iris_operator",
         name,
-        "media/textures/Damocles/icon_gear.png",
+        "media/textures/Damocles/logo_agent.png",
         -6
     )
 

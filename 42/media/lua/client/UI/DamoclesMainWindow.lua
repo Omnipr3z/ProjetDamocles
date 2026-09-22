@@ -11,13 +11,13 @@ DamoclesMainWindow = ISCollapsableWindow:derive("DamoclesMainWindow")
 DamoclesMainWindow.instance = nil
 
 function DamoclesMainWindow:new(x, y, width, height)
-    -- Calcul de la taille responsive selon l' cran
+    -- Calcul de la taille responsive selon l'ecran (reduite d'un tiers)
     local screenW = getCore():getScreenWidth()
     local screenH = getCore():getScreenHeight()
 
-    --  chelle adaptative pour petits  crans (ex: 1366x768 ou 720p)
-    local targetW = math.min(width or 720, math.floor(screenW * 0.90))
-    local targetH = math.min(height or 580, math.floor(screenH * 0.90))
+    -- Echelle compacte elegante (~1/3 plus petite que l'originale 720x580)
+    local targetW = math.min(width or 480, math.floor(screenW * 0.90))
+    local targetH = math.min(height or 380, math.floor(screenH * 0.90))
     
     local defaultX = x or math.floor((screenW - targetW) / 2)
     local defaultY = y or math.floor((screenH - targetH) / 2)
@@ -28,7 +28,7 @@ function DamoclesMainWindow:new(x, y, width, height)
 
     o.title = "ISCharacterInfoWindow" -- Style de la barre de titre
     o.resizable = false
-    o.pin = true -- Par d faut  pingl , peut  tre d pingl  pour auto-hide
+    o.pin = true -- Par defaut epingle
     o.isCollapsed = false
     o.collapseCounter = 0
 
@@ -43,7 +43,7 @@ function DamoclesMainWindow:new(x, y, width, height)
     -- Animation de clignotement / pulsation
     o.animTimer = 0.0
 
-    -- Chargement des textures optionnelles (avec fallbacks proc duraux int gr s)
+    -- Chargement des textures optionnelles (avec fallbacks proceduraux integres)
     o.texLogo = getTexture("media/textures/Damocles/logo_iris.png")
     o.texGear = getTexture("media/textures/Damocles/icon_gear.png")
     o.texFuel = getTexture("media/textures/Damocles/icon_fuel.png")
@@ -59,9 +59,9 @@ end
 function DamoclesMainWindow:initialise()
     ISCollapsableWindow.initialise(self)
 
-    -- Ajout de la barre de recherche globale segment e
-    local contentW = self:getWidth() - 40
-    self.researchBar = DamoclesProgressBar:new(20, 112, contentW, 20, true, 34)
+    -- Ajout de la barre de recherche globale compacte segmentee
+    local contentW = self:getWidth() - 32
+    self.researchBar = DamoclesProgressBar:new(16, 80, contentW, 14, true, 26)
     self.researchBar:initialise()
     self:addChild(self.researchBar)
 
@@ -237,58 +237,59 @@ function DamoclesMainWindow:prerender()
     local pulse = 0.75 + (math.sin(getTimeInMillis() / 250) * 0.25)
 
     ------------------------------------------------------------------------
-    -- 1. HEADER : IDENTIT  IRIS & FONCTION
     ------------------------------------------------------------------------
-    local headerY = 28
+    -- 1. HEADER : IDENTITE IRIS & FONCTION
+    ------------------------------------------------------------------------
+    local headerY = 22
 
     -- Logo IRIS
     if self.texLogo then
-        self:drawTextureScaled(self.texLogo, 20, headerY, 46, 46, 1.0, 1.0, 1.0, 1.0)
+        self:drawTextureScaled(self.texLogo, 14, headerY, 32, 32, 1.0, 1.0, 1.0, 1.0)
     else
         -- Fallback logo pixel art
-        self:drawRect(20, headerY, 46, 46, 0.8, 0.02, 0.12, 0.18)
-        self:drawRectBorder(20, headerY, 46, 46, 0.9, 0.0, 0.8, 1.0)
-        self:drawTextCentre("IRIS", 43, headerY + 14, self.cCyanText.r, self.cCyanText.g, self.cCyanText.b, 1.0, UIFont.Medium)
+        self:drawRect(14, headerY, 32, 32, 0.8, 0.02, 0.12, 0.18)
+        self:drawRectBorder(14, headerY, 32, 32, 0.9, 0.0, 0.8, 1.0)
+        self:drawTextCentre("IRIS", 30, headerY + 8, self.cCyanText.r, self.cCyanText.g, self.cCyanText.b, 1.0, UIFont.Small)
     end
 
     -- Titre principal
     local titleText = getTextOrNull("UI_Damocles_Title") or "IRIS - PROJET DAMOCLES"
-    self:drawText(titleText, 80, headerY + 2, self.cCyanText.r, self.cCyanText.g, self.cCyanText.b, 1.0, UIFont.Large)
+    self:drawText(titleText, 52, headerY - 1, self.cCyanText.r, self.cCyanText.g, self.cCyanText.b, 1.0, UIFont.Medium)
 
     -- Badge Fonction / Role
-    local badgeX = 80
-    local badgeY = headerY + 30
-    local badgeW = 340
-    local badgeH = 26
+    local badgeX = 52
+    local badgeY = headerY + 19
+    local badgeW = 230
+    local badgeH = 18
     self:drawRect(badgeX, badgeY, badgeW, badgeH, 0.4, 0.0, 0.2, 0.25)
     self:drawRectBorder(badgeX, badgeY, badgeW, badgeH, 0.6, 0.0, 0.7, 0.8)
 
     -- Icone engrenage
     if self.texGear then
-        self:drawTextureScaled(self.texGear, badgeX + 6, badgeY + 3, 20, 20, 1.0, 1.0, 1.0, 1.0)
+        self:drawTextureScaled(self.texGear, badgeX + 4, badgeY + 2, 14, 14, 1.0, 1.0, 1.0, 1.0)
     else
-        self:drawRect(badgeX + 6, badgeY + 5, 16, 16, 0.8, 0.3, 0.9, 0.6)
+        self:drawRect(badgeX + 4, badgeY + 3, 12, 12, 0.8, 0.3, 0.9, 0.6)
     end
-    self:drawText("FONCTION : " .. (data.operatorRole or "SURVIVANT"), badgeX + 32, badgeY + 4, 0.4, 1.0, 0.6, 1.0, UIFont.Small)
+    self:drawText("FONCTION : " .. (data.operatorRole or "SURVIVANT"), badgeX + 22, badgeY + 2, 0.4, 1.0, 0.6, 1.0, UIFont.Small)
 
     ------------------------------------------------------------------------
     -- 2. RECHERCHE GLOBALE
     ------------------------------------------------------------------------
-    local resY = 90
+    local resY = 64
     local resPrefix = getTextOrNull("UI_Damocles_Research") or "RECHERCHE GLOBALE :"
     local resText = string.format("%s [====-----]  %d%%", resPrefix, data.globalResearchPercent or 0)
-    self:drawText(resText, 20, resY, self.cCyanText.r, self.cCyanText.g, self.cCyanText.b, 1.0, UIFont.Medium)
+    self:drawText(resText, 14, resY, self.cCyanText.r, self.cCyanText.g, self.cCyanText.b, 1.0, UIFont.Small)
 
     ------------------------------------------------------------------------
     -- 3. MISSIONS EN COURS & BOUTON ARCHIVES
     ------------------------------------------------------------------------
-    local misHeaderY = 160
-    self:drawText("MISSIONS EN COURS :", 20, misHeaderY, self.cCyanText.r, self.cCyanText.g, self.cCyanText.b, 1.0, UIFont.Medium)
+    local misHeaderY = 100
+    self:drawText("MISSIONS EN COURS :", 14, misHeaderY, self.cCyanText.r, self.cCyanText.g, self.cCyanText.b, 1.0, UIFont.Small)
 
-    -- Bouton [ ARCHIVES ] (ouvre l'historique des missions compl t es)
-    local histBtnW = 120
-    local histBtnH = 22
-    local histBtnX = w - histBtnW - 20
+    -- Bouton [ ARCHIVES ] (ouvre l'historique des missions completees)
+    local histBtnW = 95
+    local histBtnH = 18
+    local histBtnX = w - histBtnW - 14
     local histBtnY = misHeaderY - 2
     local mx = self:getMouseX()
     local my = self:getMouseY()
@@ -296,12 +297,12 @@ function DamoclesMainWindow:prerender()
 
     self:drawRect(histBtnX, histBtnY, histBtnW, histBtnH, isHoverHist and 0.60 or 0.30, 0.0, 0.20, 0.25)
     local archivesBtnText = getTextOrNull("UI_Damocles_Archives") or "ARCHIVES [OK]"
-    self:drawTextCentre(archivesBtnText, histBtnX + histBtnW / 2, histBtnY + 3, self.cCyanText.r, self.cCyanText.g, self.cCyanText.b, isHoverHist and 1.0 or 0.85, UIFont.Small)
+    self:drawTextCentre(archivesBtnText, histBtnX + histBtnW / 2, histBtnY + 2, self.cCyanText.r, self.cCyanText.g, self.cCyanText.b, isHoverHist and 1.0 or 0.85, UIFont.Small)
 
-    local misBaseY = 192
-    local misStepY = 46
-    local barW = math.floor(w * 0.44)
-    local barH = 11
+    local misBaseY = 124
+    local misStepY = 38
+    local barW = math.floor(w * 0.36)
+    local barH = 8
 
     if data.missions then
         for i, m in ipairs(data.missions) do
@@ -324,40 +325,40 @@ function DamoclesMainWindow:prerender()
             end
 
             if iconTex then
-                self:drawTextureScaled(iconTex, 24, curY, 28, 28, 1.0, 1.0, 1.0, 1.0)
+                self:drawTextureScaled(iconTex, 14, curY + 1, 20, 20, 1.0, 1.0, 1.0, 1.0)
             else
-                self:drawRect(24, curY, 28, 28, 0.6, 0.0, 0.3, 0.4)
-                self:drawRectBorder(24, curY, 28, 28, 0.8, 0.0, 0.8, 1.0)
+                self:drawRect(14, curY + 1, 20, 20, 0.6, 0.0, 0.3, 0.4)
+                self:drawRectBorder(14, curY + 1, 20, 20, 0.8, 0.0, 0.8, 1.0)
             end
 
             -- Titre mission
             local isRadioContact = (m.type == "RADIO_CONTACT" or m.type == "RADIO_CRYPTO_FINAL")
             local titleCol = isRadioContact and self.cWarning or { r = 0.85, g = 0.95, b = 1.0 }
-            self:drawText(m.title, 62, curY, titleCol.r, titleCol.g, titleCol.b, isRadioContact and pulse or 1.0, UIFont.Small)
+            self:drawText(m.title, 38, curY - 1, titleCol.r, titleCol.g, titleCol.b, isRadioContact and pulse or 1.0, UIFont.Small)
 
             if m.extraData and m.extraData.isFoodAndWater then
                 -- LIGNE 1 : Conserves alimentaires
                 local fPct = math.min(1.0, (m.extraData.foodCount or 0) / (m.extraData.foodTarget or 20))
-                local barX = 62
-                local barY1 = curY + 14
-                self:drawRect(barX, barY1, barW, 8, 0.85, 0.02, 0.08, 0.12)
+                local barX = 38
+                local barY1 = curY + 13
+                self:drawRect(barX, barY1, barW, 6, 0.85, 0.02, 0.08, 0.12)
                 if fPct > 0 then
-                    self:drawRect(barX + 1, barY1 + 1, math.floor((barW - 2) * fPct), 6, 0.9, 0.0, 0.80, 0.95)
+                    self:drawRect(barX + 1, barY1 + 1, math.floor((barW - 2) * fPct), 4, 0.9, 0.0, 0.80, 0.95)
                 end
-                self:drawRectBorder(barX, barY1, barW, 8, 0.6, 0.0, 0.50, 0.65)
+                self:drawRectBorder(barX, barY1, barW, 6, 0.6, 0.0, 0.50, 0.65)
                 local foodText = string.format("Conserves : [%d/%d]", m.extraData.foodCount, m.extraData.foodTarget)
-                self:drawText(foodText, barX + barW + 12, barY1 - 2, self.cSubText.r, self.cSubText.g, self.cSubText.b, 0.95, UIFont.Small)
+                self:drawText(foodText, barX + barW + 8, barY1 - 3, self.cSubText.r, self.cSubText.g, self.cSubText.b, 0.95, UIFont.Small)
 
                 -- LIGNE 2 : Reserves d'eau et boissons
                 local wPct = math.min(1.0, (m.extraData.waterCount or 0) / (m.extraData.waterTarget or 4))
-                local barY2 = curY + 26
-                self:drawRect(barX, barY2, barW, 8, 0.85, 0.02, 0.08, 0.12)
+                local barY2 = curY + 22
+                self:drawRect(barX, barY2, barW, 6, 0.85, 0.02, 0.08, 0.12)
                 if wPct > 0 then
-                    self:drawRect(barX + 1, barY2 + 1, math.floor((barW - 2) * wPct), 6, 0.9, 0.2, 0.95, 0.70)
+                    self:drawRect(barX + 1, barY2 + 1, math.floor((barW - 2) * wPct), 4, 0.9, 0.2, 0.95, 0.70)
                 end
-                self:drawRectBorder(barX, barY2, barW, 8, 0.6, 0.1, 0.60, 0.50)
+                self:drawRectBorder(barX, barY2, barW, 6, 0.6, 0.1, 0.60, 0.50)
                 local waterText = string.format("Reserves Eau : [%d/%d]", m.extraData.waterCount, m.extraData.waterTarget)
-                self:drawText(waterText, barX + barW + 12, barY2 - 2, self.cCyanText.r, self.cCyanText.g, self.cCyanText.b, 0.95, UIFont.Small)
+                self:drawText(waterText, barX + barW + 8, barY2 - 3, self.cCyanText.r, self.cCyanText.g, self.cCyanText.b, 0.95, UIFont.Small)
             else
                 -- Compteur de progression securise standard
                 local mCur = m.current or m.currentCount or 0
@@ -370,11 +371,11 @@ function DamoclesMainWindow:prerender()
                 else
                     countText = string.format("[%d/%d] %s", mCur, mTgt, mUnit)
                 end
-                self:drawText(countText, 64 + barW + 16, curY + 14, isRadioContact and self.cWarning.r or self.cSubText.r, isRadioContact and self.cWarning.g or self.cSubText.g, isRadioContact and self.cWarning.b or self.cSubText.b, 0.95, UIFont.Small)
+                self:drawText(countText, 38 + barW + 8, curY + 12, isRadioContact and self.cWarning.r or self.cSubText.r, isRadioContact and self.cWarning.g or self.cSubText.g, isRadioContact and self.cWarning.b or self.cSubText.b, 0.95, UIFont.Small)
 
                 -- Mini barre de progression standard
-                local barX = 62
-                local barY = curY + 16
+                local barX = 38
+                local barY = curY + 14
                 local pct = (mTgt > 0) and math.min(1.0, mCur / mTgt) or 0
 
                 self:drawRect(barX, barY, barW, barH, 0.85, 0.02, 0.08, 0.12)
@@ -387,64 +388,63 @@ function DamoclesMainWindow:prerender()
     end
 
     ------------------------------------------------------------------------
-    ------------------------------------------------------------------------
     -- 4. FOOTER : ETAT QG IRIS & ALERTE DAMOCLES
     ------------------------------------------------------------------------
-    local footerY = h - 110
-    local boxW = math.floor((w - 55) / 2)
-    local boxH = 88
+    local boxH = 76
+    local footerY = h - boxH - 10
+    local boxW = math.floor((w - 38) / 2)
 
     -- BLOC GAUCHE : ETAT QG IRIS
-    local qgX = 20
+    local qgX = 14
     local hqTitleText = getTextOrNull("UI_Damocles_HQStatus") or "ETAT QG IRIS :"
-    self:drawText(hqTitleText, qgX, footerY - 18, self.cCyanText.r, self.cCyanText.g, self.cCyanText.b, 1.0, UIFont.Small)
+    self:drawText(hqTitleText, qgX, footerY - 14, self.cCyanText.r, self.cCyanText.g, self.cCyanText.b, 1.0, UIFont.Small)
 
     self:drawRect(qgX, footerY, boxW, boxH, 0.5, 0.15, 0.05, 0.02)
     self:drawRectBorder(qgX, footerY, boxW, boxH, pulse * 0.9, self.cWarning.r, self.cWarning.g, self.cWarning.b)
 
     -- Icone Warning
     if self.texWarning then
-        self:drawTextureScaled(self.texWarning, qgX + 12, footerY + 12, 30, 30, 1.0, 1.0, 1.0, 1.0)
+        self:drawTextureScaled(self.texWarning, qgX + 8, footerY + 8, 22, 22, 1.0, 1.0, 1.0, 1.0)
     else
-        self:drawRect(qgX + 14, footerY + 14, 26, 26, 0.9, 1.0, 0.5, 0.0)
+        self:drawRect(qgX + 8, footerY + 8, 20, 20, 0.9, 1.0, 0.5, 0.0)
     end
-    self:drawText(data.hqStatus.label, qgX + 50, footerY + 18, self.cWarning.r, self.cWarning.g, self.cWarning.b, pulse, UIFont.Small)
+    self:drawText(data.hqStatus.label, qgX + 34, footerY + 10, self.cWarning.r, self.cWarning.g, self.cWarning.b, pulse, UIFont.Small)
 
     -- Bouton tactique explicite : CENTRE DE COMMANDE DU QG
     local mx = self:getMouseX()
     local my = self:getMouseY()
-    local hqBtnX = qgX + 10
-    local hqBtnY = footerY + boxH - 28
-    local hqBtnW = boxW - 20
-    local hqBtnH = 22
+    local hqBtnX = qgX + 6
+    local hqBtnY = footerY + boxH - 24
+    local hqBtnW = boxW - 12
+    local hqBtnH = 18
     local isHoverHQBtn = mx >= hqBtnX and mx <= (hqBtnX + hqBtnW) and my >= hqBtnY and my <= (hqBtnY + hqBtnH)
 
     self:drawRect(hqBtnX, hqBtnY, hqBtnW, hqBtnH, isHoverHQBtn and 0.85 or 0.45, 0.0, 0.25, 0.35)
     self:drawRectBorder(hqBtnX, hqBtnY, hqBtnW, hqBtnH, isHoverHQBtn and 1.0 or 0.75, self.cCyanText.r, self.cCyanText.g, self.cCyanText.b)
     local cmdBtnText = getTextOrNull("UI_Damocles_HQ_CommandCenterBtn") or "CENTRE DE COMMANDE QG"
-    self:drawTextCentre(cmdBtnText, hqBtnX + hqBtnW / 2, hqBtnY + 3, isHoverHQBtn and 1.0 or 0.85, isHoverHQBtn and 1.0 or 0.95, 1.0, 1.0, UIFont.Small)
+    self:drawTextCentre(cmdBtnText, hqBtnX + hqBtnW / 2, hqBtnY + 2, isHoverHQBtn and 1.0 or 0.85, isHoverHQBtn and 1.0 or 0.95, 1.0, 1.0, UIFont.Small)
 
     -- BLOC DROIT : ALERTE DAMOCLES (COMPTE A REBOURS)
-    local damoX = qgX + boxW + 15
+    local damoX = qgX + boxW + 10
     local alertTitleText = getTextOrNull("UI_Damocles_Alert") or "ALERTE DAMOCLES :"
-    self:drawText(alertTitleText, damoX, footerY - 18, self.cRedAlert.r, 0.6, 0.6, 1.0, UIFont.Small)
+    self:drawText(alertTitleText, damoX, footerY - 14, self.cRedAlert.r, 0.6, 0.6, 1.0, UIFont.Small)
 
     self:drawRect(damoX, footerY, boxW, boxH, 0.6, 0.20, 0.02, 0.02)
     self:drawRectBorder(damoX, footerY, boxW, boxH, 0.95, self.cRedAlert.r, self.cRedAlert.g, self.cRedAlert.b)
 
-    -- Ic ne Nucl aire
+    -- Icone Nucleaire
     if self.texRadiation then
-        self:drawTextureScaled(self.texRadiation, damoX + 12, footerY + 12, 30, 30, 1.0, 1.0, 1.0, 1.0)
+        self:drawTextureScaled(self.texRadiation, damoX + 8, footerY + 8, 22, 22, 1.0, 1.0, 1.0, 1.0)
     else
-        self:drawRect(damoX + 14, footerY + 14, 26, 26, 0.9, 0.9, 0.1, 0.1)
+        self:drawRect(damoX + 8, footerY + 8, 20, 20, 0.9, 0.9, 0.1, 0.1)
     end
 
-    -- Affichage digital compte   rebours (format  par DamoclesGameTime)
+    -- Affichage digital compte a rebours (formatte par DamoclesGameTime)
     local cdText = DamoclesGameTime.formatGameSeconds(data.countdownGameSeconds or 0)
-    self:drawText(cdText, damoX + 50, footerY + 14, self.cRedAlert.r, 0.3, 0.3, 1.0, UIFont.Large)
+    self:drawText(cdText, damoX + 34, footerY + 7, self.cRedAlert.r, 0.3, 0.3, 1.0, UIFont.Medium)
 
-    -- Bandeau informatif d'urgence sous le compte   rebours
-    self:drawText("PROTOCOLE DE SURVIE EN COURS", damoX + 50, footerY + boxH - 24, self.cSubText.r, self.cSubText.g, self.cSubText.b, 0.8, UIFont.Small)
+    -- Bandeau informatif d'urgence sous le compte a rebours
+    self:drawText("PROTOCOLE DE SURVIE", damoX + 8, footerY + boxH - 18, self.cSubText.r, self.cSubText.g, self.cSubText.b, 0.8, UIFont.Small)
 end
 
 function DamoclesMainWindow:onMouseDown(x, y)
@@ -454,16 +454,16 @@ function DamoclesMainWindow:onMouseDown(x, y)
 
     local w = self:getWidth()
     local h = self:getHeight()
-    local footerY = h - 110
-    local boxW = math.floor((w - 55) / 2)
-    local boxH = 88
-    local qgX = 20
+    local boxH = 76
+    local footerY = h - boxH - 10
+    local boxW = math.floor((w - 38) / 2)
+    local qgX = 14
 
-    -- D tection du clic sur le bouton ARCHIVES [ ]
-    local histBtnW = 120
-    local histBtnH = 22
-    local histBtnX = w - histBtnW - 20
-    local histBtnY = 160 - 2
+    -- Detection du clic sur le bouton ARCHIVES
+    local histBtnW = 95
+    local histBtnH = 18
+    local histBtnX = w - histBtnW - 14
+    local histBtnY = 100 - 2
     if x >= histBtnX and x <= (histBtnX + histBtnW) and y >= histBtnY and y <= (histBtnY + histBtnH) then
         if not DamoclesHistoryWindow.instance then
             local hw = DamoclesHistoryWindow:new()
@@ -476,7 +476,7 @@ function DamoclesMainWindow:onMouseDown(x, y)
         return true
     end
 
-    -- D tection du clic sur le bloc  TAT QG IRIS ou son bouton   ouvre / bascule DamoclesHQWindow
+    -- Detection du clic sur le bloc ETAT QG IRIS ou son bouton -> ouvre / bascule DamoclesHQWindow
     if x >= qgX and x <= (qgX + boxW) and y >= footerY and y <= (footerY + boxH) then
         if not DamoclesHQWindow.instance then
             local hqWin = DamoclesHQWindow:new()

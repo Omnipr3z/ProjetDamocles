@@ -14,10 +14,56 @@ function DamoclesRadioContactAction:isValid()
 end
 
 function DamoclesRadioContactAction:playRadioSound(soundName)
-    if self.character and self.character.playSound then
-        pcall(function() self.character:playSound(soundName) end)
-    elseif getSoundManager() then
-        pcall(function() getSoundManager():playUISound(soundName) end)
+    if not soundName then return end
+
+    -- 1. Son spatial sur la case du terminal radio
+    pcall(function()
+        local sq = self.radioObj and self.radioObj:getSquare()
+        if sq and sq.playSound then
+            sq:playSound(soundName)
+        end
+    end)
+
+    -- 2. Emetteur audio du personnage
+    pcall(function()
+        if self.character and self.character.getEmitter then
+            self.character:getEmitter():playSound(soundName)
+        elseif self.character and self.character.playSound then
+            self.character:playSound(soundName)
+        end
+    end)
+
+    -- 3. SoundManager UI pour certitude absolue d'audition
+    pcall(function()
+        if getSoundManager() and getSoundManager().playUISound then
+            getSoundManager():playUISound(soundName)
+        end
+    end)
+end
+
+function DamoclesRadioContactAction:displayColoredMessage(text, r, g, b)
+    if not text or #text == 0 then return end
+
+    -- 1. Affichage au-dessus du terminal radio dans le monde (IsoWaveSignal ChatElement)
+    if self.radioObj then
+        pcall(function()
+            local chatElem = (self.radioObj.getChatElement and self.radioObj:getChatElement())
+            if chatElem and chatElem.addChatLine then
+                chatElem:addChatLine(text, r, g, b, 1.0)
+            end
+        end)
+        pcall(function()
+            if self.radioObj.AddDeviceText then
+                self.radioObj:AddDeviceText(text, r, g, b, "-1", "-1", 10)
+            end
+        end)
+    end
+
+    -- 2. Affichage au-dessus du joueur avec coloration RGB native (sans Say() qui forcerait du blanc)
+    if self.character and self.character.addLineChatElement then
+        pcall(function()
+            self.character:addLineChatElement(text, r, g, b)
+        end)
     end
 end
 
@@ -31,15 +77,8 @@ function DamoclesRadioContactAction:displayLine(index)
     -- Bruitage de squelch / transmission
     self:playRadioSound("RadioTalk")
 
-    -- Affichage au-dessus du terminal radio dans le monde (Cyan electrique)
-    if self.radioObj and self.radioObj.addLineChatElement then
-        self.radioObj:addLineChatElement(fullMsg, 0.15, 0.95, 1.0)
-    end
-
-    -- Affichage egalement dans le chat du joueur
-    if self.character and self.character.Say then
-        self.character:Say(fullMsg)
-    end
+    -- Affichage en Cyan electrique vibrant
+    self:displayColoredMessage(fullMsg, 0.15, 0.95, 1.00)
 end
 
 function DamoclesRadioContactAction:displayAlphaAck()
@@ -51,15 +90,8 @@ function DamoclesRadioContactAction:displayAlphaAck()
     -- Bruitage de clic micro / fin de transmission
     self:playRadioSound("RadioButton")
 
-    -- Affichage au-dessus du terminal radio en Vert Emeraude
-    if self.radioObj and self.radioObj.addLineChatElement then
-        self.radioObj:addLineChatElement(ackMsg, 0.25, 1.0, 0.45)
-    end
-
-    -- Dialogue emis par le personnage
-    if self.character and self.character.Say then
-        self.character:Say(ackMsg)
-    end
+    -- Affichage en Vert Emeraude tactique
+    self:displayColoredMessage(ackMsg, 0.25, 1.00, 0.45)
 end
 
 function DamoclesRadioContactAction:update()
@@ -99,11 +131,9 @@ function DamoclesRadioContactAction:start()
     -- Bruitage de mise sous tension et gresillement de captation
     self:playRadioSound("RadioStatic")
 
-    -- Message de syntonisation initiale
+    -- Message de syntonisation initiale en Cyan gris metallique
     local tuningMsg = "*Gresillement radio... Syntonisation de la frequence securisee...*"
-    if self.radioObj and self.radioObj.addLineChatElement then
-        self.radioObj:addLineChatElement(tuningMsg, 0.7, 0.8, 0.9)
-    end
+    self:displayColoredMessage(tuningMsg, 0.70, 0.85, 0.95)
 end
 
 function DamoclesRadioContactAction:stop()

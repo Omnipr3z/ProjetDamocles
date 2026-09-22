@@ -86,7 +86,7 @@ reg({
     order           = 4,
     category        = "LOGISTICS",
     title           = "PREPARATION QG : RAVITAILLEMENT & EAU",
-    description     = "Rassemblez au moins 20 boites de conserves et 4 contenants d'eau ou boissons de reserve (inventaire ou QG).",
+    description     = "Stockez au moins 20 vivres ou conserves non-perissables et 4 reserves d'eau/boissons dans les conteneurs du QG.",
     type            = "GATHER_FOOD",
     targetCount     = 24,
     targetFood      = 20,

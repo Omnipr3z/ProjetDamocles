@@ -179,6 +179,9 @@ local function onEveryOneMinute()
                 print("[DamoclesServerHooks] Mission GATHER_FOOD completee (vivres & eau) : " .. m.id)
                 DamoclesMissionManager.onComplete(m.id)
                 DamoclesServerHooks_broadcastState()
+                if p and p.Say then
+                    p:Say("Ravitaillement du QG termine. Je dois etablir la liaison radio avec le Central.")
+                end
             end
         elseif m.type == "SECURE_VEHICLE" then
             if p and DamoclesMissionManager.checkVehicleSecured(p) then

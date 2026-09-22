@@ -10,6 +10,7 @@ UI_EN = {
     UI_Damocles_ClaimHQ_Disabled = "[IRIS] Establish Bridgehead (IRIS Operators Only)",
     UI_Damocles_ClaimHQ_Tooltip = "Only a certified IRIS Operator possesses security credentials to secure the Insertion Point and deploy the bridgehead.",
     UI_Damocles_HQEstablished = "BRIDGEHEAD ESTABLISHED: Insertion point secured.",
+    UI_Damocles_Map_HQ = "HQ IRIS",
     UI_Damocles_MissionComplete = "OPERATION ORDER ACCOMPLISHED:",
     UI_prof_iris_operator = "IRIS Operator",
     UI_profdesc_iris_operator = "Certified field operative of the IRIS Network. Trained for military emergencies, immune to panic (Desensitized). The only operative authorized to deploy Project Damocles HQ.",

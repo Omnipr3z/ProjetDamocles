@@ -29,19 +29,32 @@ end
 --- @param r number Rouge [0-1]
 --- @param g number Vert [0-1]
 --- @param b number Bleu [0-1]
-function DamoclesMapManager.addMarker(id, x, y, text, symbol, r, g, b)
+--- Ajoute ou met a jour un marqueur tactique
+--- @param id string Identifiant unique du marqueur (ex: "hq", "obj_vehicle")
+--- @param x number Coordonnee X du monde
+--- @param y number Coordonnee Y du monde
+--- @param text string Libelle textuel associe
+--- @param symbol string Nom du symbole (ex: "Damocles_HQ", "House", "Target", "Star")
+--- @param r number Rouge [0-1]
+--- @param g number Vert [0-1]
+--- @param b number Bleu [0-1]
+--- @param scale number Echelle du symbole (defaut 0.4 = 1/3 de la taille d'origine)
+--- @param textScale number Echelle du texte (defaut 0.75)
+function DamoclesMapManager.addMarker(id, x, y, text, symbol, r, g, b, scale, textScale)
     if not id or not x or not y then return end
 
     DamoclesMapManager.markers[id] = {
-        id     = id,
-        x      = math.floor(x),
-        y      = math.floor(y),
-        text   = text or "",
-        symbol = symbol or "Target",
-        r      = r or 0.2,
-        g      = g or 0.85,
-        b      = b or 1.0,
-        a      = 1.0,
+        id        = id,
+        x         = math.floor(x),
+        y         = math.floor(y),
+        text      = text or "",
+        symbol    = symbol or "Target",
+        r         = r or 0.2,
+        g         = g or 0.85,
+        b         = b or 1.0,
+        a         = 1.0,
+        scale     = scale or 0.4,
+        textScale = textScale or 0.75,
     }
 
     print(string.format("[DamoclesMapManager] Marqueur ajoute/mis a jour : '%s' en (%d, %d)", id, x, y))
@@ -56,13 +69,15 @@ end
 function DamoclesMapManager.removeMarker(id)
     if not id then return end
     DamoclesMapManager.markers[id] = nil
+    DamoclesMapManager.injectedSymbols[id] = nil
 end
 
 --- Met a jour le marqueur du QG lors de son etablissement
+--- Echelle reduite d'un tiers (0.4) et libelle concis ("QG IRIS" / "HQ IRIS")
 function DamoclesMapManager.updateHQMarker(x, y)
     if not x or not y then return end
-    local label = "[IRIS] POINT D'INSERTION // QG ALPHA"
-    DamoclesMapManager.addMarker("hq", x, y, label, "Damocles_HQ", 0.0, 0.90, 1.0)
+    local label = getTextOrNull("UI_Damocles_Map_HQ") or "QG IRIS"
+    DamoclesMapManager.addMarker("hq", x, y, label, "Damocles_HQ", 0.0, 0.90, 1.0, 0.4, 0.75)
 end
 
 --- Met a jour la balise du terminal radio tant qu'il n'est pas installe au QG
@@ -73,8 +88,8 @@ function DamoclesMapManager.updateTerminalCarrierMarker(x, y, carrierName)
         return
     end
 
-    local label = string.format("[IRIS] TERMINAL ALPHA // EN TRANSIT (%s)", carrierName or "OPERATEUR")
-    DamoclesMapManager.addMarker("terminal_carrier", x, y, label, "Target", 1.0, 0.75, 0.1)
+    local label = string.format("[IRIS] TERMINAL ALPHA (%s)", carrierName or "OPERATEUR")
+    DamoclesMapManager.addMarker("terminal_carrier", x, y, label, "Target", 1.0, 0.75, 0.1, 0.4, 0.75)
 end
 
 --- Injecte l'ensemble des marqueurs enregistres dans le moteur de symboles de la carte
@@ -82,10 +97,31 @@ function DamoclesMapManager.applyMarkersToAPI(symbolsAPI)
     if not symbolsAPI then return end
 
     for id, m in pairs(DamoclesMapManager.markers) do
-        local key = string.format("%s_%d_%d", id, m.x, m.y)
-        if not DamoclesMapManager.injectedSymbols[key] then
+        local key = string.format("%s_%d_%d_%s_%.2f", id, m.x, m.y, m.text or "", m.scale or 0.4)
+        if DamoclesMapManager.injectedSymbols[id] ~= key then
             pcall(function()
-                -- 1. Ajout de l'icone
+                -- Nettoyage preventif de tout ancien symbole associe a ce marqueur (ex: ancien symbole geant en memoire/save)
+                if symbolsAPI.getSymbolCount and symbolsAPI.getSymbolByIndex and symbolsAPI.removeSymbolByIndex then
+                    local count = symbolsAPI:getSymbolCount()
+                    for i = count - 1, 0, -1 do
+                        local s = symbolsAPI:getSymbolByIndex(i)
+                        if s then
+                            if s:isTexture() then
+                                local sId = s.getSymbolID and s:getSymbolID()
+                                if sId == m.symbol or (id == "hq" and sId == "Damocles_HQ") then
+                                    symbolsAPI:removeSymbolByIndex(i)
+                                end
+                            elseif s:isText() then
+                                local txt = s.getUntranslatedText and s:getUntranslatedText()
+                                if txt and (txt == m.text or (id == "hq" and (txt:find("QG") or txt:find("HQ") or txt:find("IRIS")))) then
+                                    symbolsAPI:removeSymbolByIndex(i)
+                                end
+                            end
+                        end
+                    end
+                end
+
+                -- 1. Ajout de l'icone reduite d'un tiers (0.4 au lieu de 1.2)
                 if m.symbol and symbolsAPI.addTexture then
                     local sym = nil
                     local ok, res = pcall(function() return symbolsAPI:addTexture(m.symbol, m.x, m.y) end)
@@ -97,21 +133,22 @@ function DamoclesMapManager.applyMarkersToAPI(symbolsAPI)
                     if sym then
                         sym:setRGBA(m.r, m.g, m.b, m.a or 1.0)
                         sym:setAnchor(0.5, 0.5)
-                        sym:setScale(1.2)
+                        sym:setScale(m.scale or 0.4)
                     end
                 end
 
-                -- 2. Ajout du texte tactique
+                -- 2. Ajout du texte tactique concis ("QG IRIS" / "HQ IRIS")
                 if m.text and m.text ~= "" and symbolsAPI.addUntranslatedText then
-                    local txt = symbolsAPI:addUntranslatedText(m.text, UIFont.Small, m.x + 12, m.y - 8)
+                    local offsetX = math.floor(16 * (m.scale or 0.4)) + 4
+                    local txt = symbolsAPI:addUntranslatedText(m.text, UIFont.Small, m.x + offsetX, m.y - 4)
                     if txt then
                         txt:setRGBA(m.r, m.g, m.b, m.a or 1.0)
                         txt:setAnchor(0.0, 0.5)
-                        txt:setScale(1.0)
+                        txt:setScale(m.textScale or 0.75)
                     end
                 end
 
-                DamoclesMapManager.injectedSymbols[key] = true
+                DamoclesMapManager.injectedSymbols[id] = key
             end)
         end
     end

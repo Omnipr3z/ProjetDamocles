@@ -185,32 +185,22 @@ function DamoclesMainWindow:refreshDisplay()
     end
 end
 
+function DamoclesMainWindow:onMouseDownOutside(x, y)
+    if not self.pin and self:isVisible() then
+        self:close()
+    end
+end
+
 function DamoclesMainWindow:update()
     ISCollapsableWindow.update(self)
 
-    -- D cr mentation du compte   rebours mock en temps r el
+    -- Decrementation du compte a rebours mock en temps reel
     self.animTimer = self.animTimer + (UIManager.getMillisSinceLastRender() / 1000)
     if self.animTimer >= 1.0 then
         self.animTimer = self.animTimer - 1.0
         local data = DamoclesMockData.getData()
         if data and data.countdownActive and data.countdownSeconds > 0 then
             data.countdownSeconds = data.countdownSeconds - 1
-        end
-    end
-
-    -- Gestion du comportement Auto-Hide quand la fen tre n'est pas  pingl e (pin = false)
-    if not self.pin then
-        if self:isMouseOver() then
-            if self.isCollapsed then
-                self:uncollapse()
-            end
-            self.collapseCounter = 0
-        else
-            self.collapseCounter = self.collapseCounter + 1
-            -- D lai avant repli
-            if self.collapseCounter > 40 and not self.isCollapsed then
-                self:collapse()
-            end
         end
     end
 end
@@ -346,7 +336,7 @@ function DamoclesMainWindow:prerender()
                     self:drawRect(barX + 1, barY1 + 1, math.floor((barW - 2) * fPct), 4, 0.9, 0.0, 0.80, 0.95)
                 end
                 self:drawRectBorder(barX, barY1, barW, 6, 0.6, 0.0, 0.50, 0.65)
-                local foodText = string.format("Conserves : [%d/%d]", m.extraData.foodCount, m.extraData.foodTarget)
+                local foodText = string.format("Vivres (QG) : [%d/%d]", m.extraData.foodCount, m.extraData.foodTarget)
                 self:drawText(foodText, barX + barW + 8, barY1 - 3, self.cSubText.r, self.cSubText.g, self.cSubText.b, 0.95, UIFont.Small)
 
                 -- LIGNE 2 : Reserves d'eau et boissons
@@ -357,7 +347,7 @@ function DamoclesMainWindow:prerender()
                     self:drawRect(barX + 1, barY2 + 1, math.floor((barW - 2) * wPct), 4, 0.9, 0.2, 0.95, 0.70)
                 end
                 self:drawRectBorder(barX, barY2, barW, 6, 0.6, 0.1, 0.60, 0.50)
-                local waterText = string.format("Reserves Eau : [%d/%d]", m.extraData.waterCount, m.extraData.waterTarget)
+                local waterText = string.format("Eau / Boissons (QG) : [%d/%d]", m.extraData.waterCount, m.extraData.waterTarget)
                 self:drawText(waterText, barX + barW + 8, barY2 - 3, self.cCyanText.r, self.cCyanText.g, self.cCyanText.b, 0.95, UIFont.Small)
             else
                 -- Compteur de progression securise standard

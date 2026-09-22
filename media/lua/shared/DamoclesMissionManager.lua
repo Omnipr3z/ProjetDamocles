@@ -522,7 +522,8 @@ function DamoclesMissionManager.checkHoldItems(player, mission)
     return true
 end
 
---- Verifie si le joueur ou le QG dispose de conserves et de contenants d'eau/boissons
+--- Verifie si le QG dispose de conserves/vivres non-perissables et de contenants d'eau/boissons
+--- Ne prend en compte STRICTEMENT que les vivres stockes dans les conteneurs du QG.
 --- @param player IsoPlayer
 --- @param reqFood number (defaut: 20)
 --- @param reqWater number (defaut: 4)
@@ -533,15 +534,79 @@ function DamoclesMissionManager.checkFoodSupplies(player, reqFood, reqWater)
     local foodCount = 0
     local waterCount = 0
 
-    local function isCannedFood(it)
+    local function isNonPerishableFood(it)
         if not it then return false end
+
+        -- Verification que l'objet est bien de type nourriture
+        local isFood = false
+        if it.IsFood and it:IsFood() then isFood = true end
+        if not isFood and it.getCategory and it:getCategory() == "Food" then isFood = true end
+        if not isFood and (it.getHungerChange and it:getHungerChange() < 0) then isFood = true end
+        if not isFood then return false end
+
+        -- Exclusion formelle des aliments pourris ou brules
+        if it.isRotten and it:isRotten() then return false end
+        if it.isBurnt and it:isBurnt() then return false end
+
         local ft = (it.getFullType and it:getFullType()) or ""
         local t = (it.getType and it:getType()) or ""
-        if t:find("Canned") or t:find("Tinned") or t:find("Tin")
-           or t:find("Ration") or t:find("Beans") or t:find("Soup") or t:find("Tuna")
-           or ft:find("Canned") or ft:find("Tinned") or ft:find("Tin") or ft:find("Tuna") then
+        local name = (it.getName and it:getName()) or ""
+        local dName = (it.getDisplayName and it:getDisplayName()) or ""
+
+        -- Exclusion des boites/bocaux vides
+        if t:find("Empty") or ft:find("Empty") or name:find("Empty") or dName:find("Empty")
+           or name:find("vide") or dName:find("vide") then
+            return false
+        end
+
+        -- 1. Proprietes natives du moteur PZ pour les aliments non-perissables
+        if it.getOffAge and it:getOffAge() and it:getOffAge() >= 100000 then
             return true
         end
+        if it.getOffAgeMax and it:getOffAgeMax() and it:getOffAgeMax() >= 100000 then
+            return true
+        end
+        if it.isCanned and it:isCanned() then
+            return true
+        end
+
+        -- 2. Compatibilite directe avec le mod Project France (conserve, bocaux, plats cuisines en boite)
+        if ft:find("ProjectFrance.") then
+            -- Seuls les produits de boulangerie fraiche du mod sont perissables
+            if not t:find("Baguette") and not t:find("Croissant") and not t:find("PainChocolat") then
+                return true
+            end
+        end
+
+        -- 3. Reconnaissance par mots-cles universels (Vanilla, Project France, mods de survie)
+        local checkStr = (t .. " " .. ft .. " " .. name .. " " .. dName):lower()
+        local keywords = {
+            -- Conserves, conserves ouvertes et rations militaires
+            "canned", "tinned", "tin", "ration", "mre", "beans", "soup", "tuna",
+            "cornedbeef", "sardine", "salmon", "chili", "bolognese", "evaporatedmilk", "spam",
+            -- Bocaux, terrines, pates et confits (France et terroir)
+            "bocal", "bocaux", "jar", "terrine", "pate", "confit", "rillettes", "foiegras",
+            "confiture", "jam", "marmalade", "pickle", "pickled", "conserve",
+            -- Biscuits, crackers, chips et aperitifs non perissables
+            "biscuit", "cookie", "cracker", "crisps", "chips", "pretzel", "popcorn", "snack",
+            -- Chocolats, barres energiques et sucreries
+            "chocolate", "choc", "candy", "candies", "gummy", "lollipop", "marshmallow", "bonbon",
+            "snickers", "mars",
+            -- Feculents et cereales seches
+            "cereal", "oats", "oatmeal", "pasta", "macaroni", "rice", "ramen", "noodles",
+            "peanutbutter", "beefjerky", "jerky",
+            -- Plats traditionnels Project France
+            "tartiflette", "boeufbourguignon", "blanquette", "bouillabaisse", "grabure",
+            "andouillette", "confitdecanard", "piperade", "daube", "cassoulet", "ratatouille",
+            "axoa", "choucroute", "moules", "petitsale"
+        }
+
+        for _, kw in ipairs(keywords) do
+            if checkStr:find(kw) then
+                return true
+            end
+        end
+
         return false
     end
 
@@ -549,20 +614,26 @@ function DamoclesMissionManager.checkFoodSupplies(player, reqFood, reqWater)
         if not it then return false end
         -- 1. Source d'eau (bouteille, marmite, seau, gourde vanilla ou mod)
         if it.isWaterSource and it:isWaterSource() then
+            if it.getUsedDelta and it:getUsedDelta() <= 0 then
+                return false
+            end
             return true
         end
-        -- 2. Consommables reduisant la soif (jus, sodas, biere, lait, boissons de mods)
+        -- 2. Consommables hydratants (jus, sodas, biere, cidre, boissons)
         if it.getThirstChange and it:getThirstChange() < -0.05 then
             return true
         end
-        -- 3. Reconnaissance par categorie et types (vanilla & mods)
+        -- 3. Reconnaissance par mots-cles de boissons non vides
         local t = (it.getType and it:getType()) or ""
         local ft = (it.getFullType and it:getFullType()) or ""
-        if t:find("Water") or t:find("Pop") or t:find("Soda") or t:find("Juice")
-           or t:find("Beer") or t:find("Wine") or t:find("Drink") or t:find("Whiskey")
-           or ft:find("Water") or ft:find("Pop") or ft:find("Soda") or ft:find("Juice")
-           or ft:find("Beer") or ft:find("Wine") or ft:find("Drink") then
-            if not t:find("Empty") and not ft:find("Empty") then
+        local name = (it.getName and it:getName()) or ""
+        local checkStr = (t .. " " .. ft .. " " .. name):lower()
+        if checkStr:find("water") or checkStr:find("pop") or checkStr:find("soda")
+           or checkStr:find("juice") or checkStr:find("beer") or checkStr:find("wine")
+           or checkStr:find("drink") or checkStr:find("cider") or checkStr:find("cidre")
+           or checkStr:find("whiskey") or checkStr:find("bourbon") or checkStr:find("limonade")
+           or checkStr:find("sirop") or checkStr:find("eau") then
+            if not checkStr:find("empty") and not checkStr:find("vide") then
                 return true
             end
         end
@@ -575,45 +646,51 @@ function DamoclesMissionManager.checkFoodSupplies(player, reqFood, reqWater)
         if not items then return end
         for i = 0, items:size() - 1 do
             local it = items:get(i)
-            if isCannedFood(it) then
-                foodCount = foodCount + 1
-            elseif isWaterSupply(it) then
-                waterCount = waterCount + 1
-            end
-            if it and it.getItemContainer and it:getItemContainer() then
-                scanContainer(it:getItemContainer())
+            if it then
+                if isNonPerishableFood(it) then
+                    foodCount = foodCount + 1
+                elseif isWaterSupply(it) then
+                    waterCount = waterCount + 1
+                end
+                -- Scan recursif si l'item stocke lui-meme des objets (sac, glaciere rangee dans un conteneur)
+                if it.getItemContainer and it:getItemContainer() then
+                    scanContainer(it:getItemContainer())
+                end
             end
         end
     end
 
-    if player then
-        scanContainer(player:getInventory())
+    -- SCAN EXCLUSIF DES CONTENEURS DU QG (L'inventaire du joueur n'est PAS pris en compte)
+    local b = _state.hqBuilding
+    if not b and _state.hqLocation then
+        b = {
+            minX = _state.hqLocation.x - 15,
+            maxX = _state.hqLocation.x + 15,
+            minY = _state.hqLocation.y - 15,
+            maxY = _state.hqLocation.y + 15,
+        }
     end
 
-    -- Si l'inventaire ne suffit pas a remplir les deux conditions, verifier les conteneurs du QG
-    if (foodCount < targetFood or waterCount < targetWater) and _state.hqBuilding then
+    if b then
         local cell = getCell()
         if cell then
-            local b = _state.hqBuilding
-            for x = b.minX, b.maxX do
-                for y = b.minY, b.maxY do
-                    local sq = cell:getGridSquare(x, y, 0)
-                    if sq then
-                        local objs = sq:getObjects()
-                        if objs then
-                            for o = 0, objs:size() - 1 do
-                                local obj = objs:get(o)
-                                local cont = obj and obj:getContainer()
-                                if cont then
-                                    local cItems = cont:getItems()
-                                    if cItems then
-                                        for ci = 0, cItems:size() - 1 do
-                                            local it = cItems:get(ci)
-                                            if isCannedFood(it) then
-                                                foodCount = foodCount + 1
-                                            elseif isWaterSupply(it) then
-                                                waterCount = waterCount + 1
+            for z = 0, 7 do
+                for x = b.minX, b.maxX do
+                    for y = b.minY, b.maxY do
+                        local sq = cell:getGridSquare(x, y, z)
+                        if sq then
+                            local objs = sq:getObjects()
+                            if objs then
+                                for o = 0, objs:size() - 1 do
+                                    local obj = objs:get(o)
+                                    if obj then
+                                        local count = (obj.getContainerCount and obj:getContainerCount()) or 0
+                                        if count > 0 then
+                                            for cIdx = 0, count - 1 do
+                                                scanContainer(obj:getContainerByIndex(cIdx))
                                             end
+                                        elseif obj.getContainer and obj:getContainer() then
+                                            scanContainer(obj:getContainer())
                                         end
                                     end
                                 end

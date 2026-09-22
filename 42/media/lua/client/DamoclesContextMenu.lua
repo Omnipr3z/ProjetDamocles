@@ -352,9 +352,13 @@ local function onFillWorldObjectContextMenu(playerNum, context, worldobjects, te
             local icon = getTexture("media/textures/Damocles/logo_iris.png")
 
             if contactMission then
-                -- Option active : etablir le contact
+                -- Option active : etablir le contact contextualise
+                local optLabel = "[IRIS] Contacter le Commandement Central"
+                if contactMission.title then
+                    optLabel = string.format("[IRIS] Liaison Radio : %s", contactMission.title)
+                end
                 local opt = context:addOption(
-                    "[IRIS] Contacter le Commandement Central",
+                    optLabel,
                     worldobjects,
                     onContactCentral,
                     playerNum,

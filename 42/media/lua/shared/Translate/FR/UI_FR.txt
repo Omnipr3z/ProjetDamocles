@@ -10,6 +10,7 @@ UI_FR = {
     UI_Damocles_ClaimHQ_Disabled = "[IRIS] Etablir la tete de pont (Reserve aux Operateurs IRIS)",
     UI_Damocles_ClaimHQ_Tooltip = "Seul un Operateur IRIS certifie possede les codes d'accreditation pour securiser le Point d'Insertion et deployer la tete de pont.",
     UI_Damocles_HQEstablished = "TETE DE PONT ETABLIE : Point d'insertion securise.",
+    UI_Damocles_Map_HQ = "QG IRIS",
     UI_Damocles_MissionComplete = "ORDRE DE MISSION ACCOMPLI :",
     UI_prof_iris_operator = "Operateur IRIS",
     UI_profdesc_iris_operator = "Agent de terrain certifie du Reseau IRIS. Entraine aux situations d'urgence militaire, insensible a la panique (Desensibilise). Seul individu capable de deployer le QG de l'Operation Damocles.",

@@ -1,0 +1,10 @@
+VERSION = 1,
+
+option Damocles.CountdownDays = {
+	type = integer,
+	default = 14,
+	min = 5,
+	max = 30,
+	page = Damocles,
+	translation = Damocles_CountdownDays,
+}

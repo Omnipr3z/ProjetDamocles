@@ -1,0 +1,5 @@
+Sandbox_EN = {
+    Sandbox_Damocles = "Project Damocles",
+    Sandbox_Damocles_CountdownDays = "Initial Countdown (Days)",
+    Sandbox_Damocles_CountdownDays_tooltip = "Number of in-game days granted to Unit ALPHA before the automated orbital Damocles strike is triggered (Default: 14 days, adjustable from 5 to 30 days).",
+}

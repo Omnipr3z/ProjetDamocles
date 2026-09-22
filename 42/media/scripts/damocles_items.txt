@@ -1,0 +1,56 @@
+module Damocles
+{
+    imports
+    {
+        Base
+    }
+
+    item Damocles_Doc_Vol1
+    {
+        Type = Literature,
+        DisplayName = Dossier Evans Vol. 1 - Protocoles d'Urgence,
+        Icon = BookMedical,
+        Weight = 0.5,
+        StaticModel = Book,
+        WorldStaticModel = Book_Ground,
+    }
+
+    item Damocles_Doc_Vol2
+    {
+        Type = Literature,
+        DisplayName = Dossier Archimede Vol. 2 - Virologie & Centrifugation,
+        Icon = BookMedical,
+        Weight = 0.5,
+        StaticModel = Book,
+        WorldStaticModel = Book_Ground,
+    }
+
+    item Damocles_Doc_Vol3
+    {
+        Type = Literature,
+        DisplayName = Dossier Promethee Vol. 3 - Culture Cellulaire,
+        Icon = BookMedical,
+        Weight = 0.5,
+        StaticModel = Book,
+        WorldStaticModel = Book_Ground,
+    }
+
+    item Damocles_Doc_Vol4
+    {
+        Type = Literature,
+        DisplayName = Dossier Lazare Vol. 4 - Stabilisation du Vaccin,
+        Icon = BookMedical,
+        Weight = 0.5,
+        StaticModel = Book,
+        WorldStaticModel = Book_Ground,
+    }
+
+    item Damocles_Vaccine_Vial
+    {
+        Type = Normal,
+        DisplayName = Vaccin Damocles (Fiole Stabilisee),
+        Icon = VialBlood,
+        Weight = 0.2,
+        StaticModel = PillBottle,
+    }
+}

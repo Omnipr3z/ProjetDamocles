@@ -1,0 +1,5 @@
+Sandbox_FR = {
+    Sandbox_Damocles = "Projet Damocles",
+    Sandbox_Damocles_CountdownDays = "Compte a rebours initial (Jours)",
+    Sandbox_Damocles_CountdownDays_tooltip = "Nombre de jours accordes a l'Unite ALPHA avant le declenchement automatique de la frappe orbitale Damocles (Defaut : 14 jours, reglable de 5 a 30 jours).",
+}

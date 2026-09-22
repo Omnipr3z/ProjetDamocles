@@ -1,0 +1,7 @@
+name=Projet Damocles
+id=ProjetDamocles
+description=Compte a rebours Damocles et reseau de recherche IRIS pour la survie et le vaccin.
+poster=poster.png
+versionMin=42.0.0
+modversion=1.0.0
+require=ComputerModkum41,DemoniusZombieVirusVaccine,AliceGear

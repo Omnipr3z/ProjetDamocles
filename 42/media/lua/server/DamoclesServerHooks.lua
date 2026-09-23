@@ -11,6 +11,7 @@
 ]]
 
 require "DamoclesMissionManager"
+require "DamoclesMissionValidator"
 require "DamoclesMissionDB"
 require "DamoclesGameTime"
 require "DamoclesWorldSpawner"
@@ -98,38 +99,7 @@ end
 ------------------------------------------------------------------------
 
 local function onObjectAdded(obj)
-    if not obj then return end
-    pcall(function()
-        local hqLoc = DamoclesMissionManager.getHQLocation()
-        if not hqLoc then return end
-
-        local objType = (obj.getFullType and obj:getFullType()) or ""
-        local spriteName = (obj.getSprite and obj:getSprite() and obj:getSprite():getName()) or ""
-
-        local ox = math.floor(obj:getX())
-        local oy = math.floor(obj:getY())
-        local oz = math.floor(obj:getZ())
-        local inBuilding = DamoclesMissionManager.isInsideHQ(ox, oy, oz)
-
-        -- Detection du Generateur
-        local it = obj.getItem and obj:getItem()
-        local itemType = (it and it.getFullType and it:getFullType()) or ""
-        local isGen = (instanceof(obj, "IsoGenerator"))
-            or (objType == "Base.Generator")
-            or (itemType == "Base.Generator")
-            or (spriteName ~= "" and spriteName:find("appliances_misc_01_0") ~= nil)
-
-
-        if isGen then
-            local mGen = DamoclesMissionDB.getById("task_3_lab_station")
-            if mGen and mGen.status == "ACTIVE" then
-                local d = dist2D(ox, oy, hqLoc.x, hqLoc.y)
-                if inBuilding or d <= HQ_OBJECT_SCAN_RADIUS then
-                    print(string.format("[DamoclesServerHooks] Generateur detecte a proximite du QG (dist: %.1f).", d))
-                end
-            end
-        end
-    end)
+    DamoclesMissionValidator.onObjectAdded(obj)
 end
 
 Events.OnObjectAdded.Add(onObjectAdded)
@@ -142,84 +112,26 @@ local function onEveryOneMinute()
     if not DamoclesMissionDB or not DamoclesMissionDB.getById then return end
     DamoclesMissionManager.checkCountdownExpiry()
 
-    -- Verification Tache 1 : Zone sterile (0 cadavre + barricades)
-    local mTask1 = DamoclesMissionDB.getById("task_1_sterile")
-    if mTask1 and mTask1.status == "ACTIVE" then
-        local noCorpses = DamoclesMissionManager.areCorpsesCleanedInHQ()
-        local barricaded = DamoclesMissionManager.isHQBarricaded()
-        if noCorpses and barricaded then
-            print("[DamoclesServerHooks] Tache 1 validee : Zone sterile et barricadee.")
-            DamoclesMissionManager.onComplete("task_1_sterile")
-            DamoclesServerHooks_broadcastState()
-        end
-    end
-
-    -- Verification Tache 3 : Generateur connecte et alimente
-    local mTask3 = DamoclesMissionDB.getById("task_3_lab_station")
-    if mTask3 and mTask3.status == "ACTIVE" then
-        if DamoclesMissionManager.isHQPoweredByGenerator() then
-            print("[DamoclesServerHooks] Tache 3 validee : Generateur en ligne avec carburant.")
-            DamoclesMissionManager.onComplete("task_3_lab_station")
-            DamoclesServerHooks_broadcastState()
-        end
-    end
-
-    -- Verification des missions actives
-    local activeMissions = DamoclesMissionManager.getActiveMissions()
-    local p = getPlayer()
-    for _, m in ipairs(activeMissions) do
-        if m.type == "HOLD_ITEMS" then
-            if p and DamoclesMissionManager.checkHoldItems(p, m) then
-                print("[DamoclesServerHooks] Mission HOLD_ITEMS completee : " .. m.id)
-                DamoclesMissionManager.onComplete(m.id)
-                DamoclesServerHooks_broadcastState()
-            end
-        elseif m.type == "GATHER_FOOD" then
-            if p and DamoclesMissionManager.checkFoodSupplies(p, m.targetFood or 20, m.targetWater or 4) then
-                print("[DamoclesServerHooks] Mission GATHER_FOOD completee (vivres & eau) : " .. m.id)
-                DamoclesMissionManager.onComplete(m.id)
-                DamoclesServerHooks_broadcastState()
-                if p and p.Say then
-                    p:Say("Ravitaillement du QG termine. Je dois etablir la liaison radio avec le Central.")
-                end
-            end
-        elseif m.type == "SECURE_VEHICLE" then
-            if p and DamoclesMissionManager.checkVehicleSecured(p) then
-                print("[DamoclesServerHooks] Mission SECURE_VEHICLE completee : " .. m.id)
-                DamoclesMissionManager.onComplete(m.id)
-                DamoclesServerHooks_broadcastState()
-            end
-        elseif m.type == "INSTALL_COMPUTER" then
-            if p and DamoclesMissionManager.checkComputerInstalled(p) then
-                print("[DamoclesServerHooks] Mission INSTALL_COMPUTER completee : " .. m.id)
-                DamoclesMissionManager.onComplete(m.id)
-                DamoclesServerHooks_broadcastState()
-            end
-        elseif m.type == "FIND_GENERATOR_FUEL" then
-            if p and DamoclesMissionManager.checkGeneratorAcquired(p) then
-                print("[DamoclesServerHooks] Mission FIND_GENERATOR_FUEL completee : " .. m.id)
-                DamoclesMissionManager.onComplete(m.id)
-                DamoclesServerHooks_broadcastState()
-            end
-        end
-    end
+    local player = getPlayer()
+    DamoclesMissionValidator.onEveryOneMinute(player)
 
     DamoclesMissionManager._saveToModData()
 end
 
 Events.EveryOneMinute.Add(onEveryOneMinute)
 
--- Hook : Verification lors de la descente d'un vehicule (permet de valider immediatement si stationne au QG)
+-- Hook : Entree dans un vehicule (Events.OnEnterVehicle)
+local function onEnterVehicle(character)
+    DamoclesMissionValidator.onEnterVehicle(character)
+end
+
+if Events.OnEnterVehicle then
+    Events.OnEnterVehicle.Add(onEnterVehicle)
+end
+
+-- Hook : Descente d'un vehicule (Events.OnExitVehicle)
 local function onExitVehicle(character)
-    local mVeh = DamoclesMissionDB.getById("prep_vehicle")
-    if mVeh and mVeh.status == "ACTIVE" then
-        local isComplete, steps = DamoclesMissionManager.checkVehicleSecured(character)
-        if isComplete then
-            print("[DamoclesServerHooks] Vehicule pleinement securise au QG (3/3 etapes) -> prep_vehicle validee !")
-            DamoclesMissionManager.onComplete("prep_vehicle")
-            DamoclesServerHooks_broadcastState()
-        end
-    end
+    DamoclesMissionValidator.onExitVehicle(character)
 end
 
 Events.OnExitVehicle.Add(onExitVehicle)

@@ -39,6 +39,7 @@ function DamoclesMainWindow:new(x, y, width, height)
     o.cSubText = { r = 0.50, g = 0.80, b = 0.85, a = 0.9 }
     o.cWarning = { r = 1.00, g = 0.55, b = 0.15, a = 1.0 }
     o.cRedAlert = { r = 1.00, g = 0.20, b = 0.20, a = 1.0 }
+    o.cGreen = { r = 0.20, g = 0.95, b = 0.45, a = 1.0 }
 
     -- Animation de clignotement / pulsation
     o.animTimer = 0.0
@@ -82,34 +83,71 @@ function DamoclesMainWindow:uncollapse()
     end
 end
 
---- Construit les donn es d'affichage en prioritisant le state client (MP),
---- puis MissionManager directement (Solo), avec fallback mock en tout dernier recours.
---- @return table displayData pr t pour le prerender
-function DamoclesMainWindow:_buildDisplayData()
-    -- 1. Si le state client a  t  hydrat  par le serveur
-    if DamoclesClientState and DamoclesClientState.initialized then
-        local state = DamoclesClientState
-        local countdown = DamoclesGameTime.getRemainingGameSeconds(state.deadlineWorldHours)
-        return {
-            globalResearchPercent = state.globalResearch or 0,
-            countdownGameSeconds  = countdown,
-            operatorRole          = state.operatorRole or "AGENT IRIS",
-            hqStatus              = state.hqStatus or { label = "EN ATTENTE", level = "normal" },
-            missions              = state.missions or {},
-        }
-    end
+--- Projette les missions actives pour l'affichage :
+--- Si la mission de vehicule tactique est active, elle est projetee comme
+--- 3 missions simultanees (Recuperer & entrer dedans, Carburant 3L, Rapatrier au QG).
+function DamoclesMainWindow:_expandMissions(rawMissions)
+    local activeMissions = {}
+    local p = getPlayer()
 
-    -- 2. En Solo / Host local : lecture directe depuis DamoclesMissionManager
-    if DamoclesMissionManager and not isClient() then
-        DamoclesMissionManager.init()
-        local activeMissions = {}
-        for _, m in ipairs(DamoclesMissionManager.getActiveMissions()) do
+    for _, m in ipairs(rawMissions or {}) do
+        if m.type == "SECURE_VEHICLE" then
+            local isDone, steps, details = false, 0, nil
+            if DamoclesMissionManager and DamoclesMissionManager.checkVehicleSecured then
+                isDone, steps, details = DamoclesMissionManager.checkVehicleSecured(p)
+            end
+            details = details or { step1 = false, step2 = false, step3 = false, fuel = 0.0, fuelTarget = 3.0 }
+
+            -- Tache 1 : Recuperer le vehicule & entrer dedans (ou demarrer)
+            table.insert(activeMissions, {
+                id           = "prep_vehicle_step1",
+                title        = "VEHICULE : PRENDRE LE CONTROLE",
+                category     = "LOGISTICS",
+                type         = "SECURE_VEHICLE_STEP",
+                current      = details.step1 and 1 or 0,
+                currentCount = details.step1 and 1 or 0,
+                target       = 1,
+                targetCount  = 1,
+                unit         = "",
+                status       = details.step1 and "COMPLETED" or "ACTIVE",
+                subIcon      = "key",
+            })
+
+            -- Tache 2 : Carburant suffisant (min. 3L)
+            local curFuelRounded = math.floor(((details.fuel or 0.0) + 0.05) * 10) / 10
+            table.insert(activeMissions, {
+                id           = "prep_vehicle_step2",
+                title        = "VEHICULE : NIVEAU DE CARBURANT (3L)",
+                category     = "LOGISTICS",
+                type         = "SECURE_VEHICLE_STEP",
+                current      = details.step2 and 3.0 or math.min(3.0, curFuelRounded),
+                currentCount = details.step2 and 3.0 or math.min(3.0, curFuelRounded),
+                target       = 3.0,
+                targetCount  = 3.0,
+                unit         = "L",
+                status       = details.step2 and "COMPLETED" or "ACTIVE",
+                subIcon      = "fuel",
+            })
+
+            -- Tache 3 : Rapatrier le vehicule a proximite du QG (<= 35 cases)
+            table.insert(activeMissions, {
+                id           = "prep_vehicle_step3",
+                title        = "VEHICULE : RAPATRIER AU QG",
+                category     = "LOGISTICS",
+                type         = "SECURE_VEHICLE_STEP",
+                current      = details.step3 and 1 or 0,
+                currentCount = details.step3 and 1 or 0,
+                target       = 1,
+                targetCount  = 1,
+                unit         = "",
+                status       = details.step3 and "COMPLETED" or "ACTIVE",
+                subIcon      = "hq",
+            })
+        elseif m.type == "GATHER_FOOD" then
             local mCur = m.currentCount or 0
-            local p = getPlayer()
-
             local extraData = nil
             pcall(function()
-                if m.type == "GATHER_FOOD" then
+                if DamoclesMissionManager and DamoclesMissionManager.checkFoodSupplies then
                     local isDone, foodCount, waterCount = DamoclesMissionManager.checkFoodSupplies(p, 20, 4)
                     mCur = (foodCount or 0) + (waterCount or 0)
                     extraData = {
@@ -119,20 +157,35 @@ function DamoclesMainWindow:_buildDisplayData()
                         waterCount = waterCount or 0,
                         waterTarget = 4,
                     }
-                elseif m.type == "SECURE_VEHICLE" then
-                    local isDone, steps = DamoclesMissionManager.checkVehicleSecured(p)
-                    mCur = steps or (isDone and 3 or 0)
-                elseif m.type == "FIND_GENERATOR_FUEL" then
+                end
+            end)
+            table.insert(activeMissions, {
+                id           = m.id,
+                title        = m.title,
+                category     = m.category,
+                type         = m.type,
+                current      = mCur,
+                currentCount = mCur,
+                target       = m.targetCount or 24,
+                targetCount  = m.targetCount or 24,
+                unit         = m.unit or "",
+                status       = m.status,
+                extraData    = extraData or m.extraData,
+            })
+        else
+            local mCur = m.currentCount or m.current or 0
+            pcall(function()
+                if m.type == "FIND_GENERATOR_FUEL" and DamoclesMissionManager then
                     mCur = DamoclesMissionManager.checkGeneratorAcquired(p) and 1 or 0
-                elseif m.type == "CLEAN_CORPSES" then
+                elseif m.type == "CLEAN_CORPSES" and DamoclesMissionManager then
                     mCur = DamoclesMissionManager.areCorpsesCleanedInHQ() and 1 or 0
-                elseif m.type == "BARRICADE_ACCESS" then
+                elseif m.type == "BARRICADE_ACCESS" and DamoclesMissionManager then
                     mCur = DamoclesMissionManager.isHQBarricaded() and 1 or 0
-                elseif m.type == "CONNECT_POWER" then
+                elseif m.type == "CONNECT_POWER" and DamoclesMissionManager then
                     mCur = DamoclesMissionManager.isHQPoweredByGenerator() and 1 or 0
-                elseif m.type == "SAFEHOUSE_CLAIM" then
+                elseif m.type == "SAFEHOUSE_CLAIM" and DamoclesMissionManager then
                     mCur = DamoclesMissionManager.getHQBuilding() and 1 or 0
-                elseif m.type == "PLACE_OBJECT_SURFACE" then
+                elseif m.type == "PLACE_OBJECT_SURFACE" and DamoclesMissionManager then
                     mCur = DamoclesMissionManager.isMissionCompleted("hq_radio") and 1 or 0
                 elseif m.type == "HOLD_ITEMS" and m.requiredItems and #m.requiredItems > 0 and p then
                     local inv = p:getInventory()
@@ -149,20 +202,44 @@ function DamoclesMainWindow:_buildDisplayData()
                 type         = m.type,
                 current      = mCur,
                 currentCount = mCur,
-                target       = m.targetCount or 1,
-                targetCount  = m.targetCount or 1,
+                target       = m.targetCount or m.target or 1,
+                targetCount  = m.targetCount or m.target or 1,
                 unit         = m.unit or "",
                 status       = m.status,
-                extraData    = extraData,
+                extraData    = m.extraData,
             })
         end
+    end
 
+    return activeMissions
+end
+
+--- Construit les donnees d'affichage en prioritisant le state client (MP),
+--- puis MissionManager directement (Solo), avec fallback mock en tout dernier recours.
+--- @return table displayData pret pour le prerender
+function DamoclesMainWindow:_buildDisplayData()
+    -- 1. Si le state client a ete hydrate par le serveur
+    if DamoclesClientState and DamoclesClientState.initialized then
+        local state = DamoclesClientState
+        local countdown = DamoclesGameTime.getRemainingGameSeconds(state.deadlineWorldHours)
+        return {
+            globalResearchPercent = state.globalResearch or 0,
+            countdownGameSeconds  = countdown,
+            operatorRole          = state.operatorRole or "AGENT IRIS",
+            hqStatus              = state.hqStatus or { label = "EN ATTENTE", level = "normal" },
+            missions              = self:_expandMissions(state.missions or {}),
+        }
+    end
+
+    -- 2. En Solo / Host local : lecture directe depuis DamoclesMissionManager
+    if DamoclesMissionManager and not isClient() then
+        DamoclesMissionManager.init()
         return {
             globalResearchPercent = DamoclesMissionManager.getGlobalResearch(),
             countdownGameSeconds  = DamoclesMissionManager.getCountdown(),
             operatorRole          = "AGENT IRIS",
             hqStatus              = DamoclesMissionManager.getHQStatus(),
-            missions              = activeMissions,
+            missions              = self:_expandMissions(DamoclesMissionManager.getActiveMissions()),
         }
     end
 
@@ -173,7 +250,7 @@ function DamoclesMainWindow:_buildDisplayData()
         countdownGameSeconds  = mock.countdownSeconds or 0,
         operatorRole          = mock.operatorRole,
         hqStatus              = mock.hqStatus,
-        missions              = mock.missions,
+        missions              = self:_expandMissions(mock.missions),
     }
 end
 
@@ -300,7 +377,13 @@ function DamoclesMainWindow:prerender()
 
             -- Icone mission adaptee selon la categorie
             local iconTex = nil
-            if m.type == "RADIO_CONTACT" or m.type == "RADIO_CRYPTO_FINAL" or m.category == "RADIO" then
+            if m.subIcon == "key" or m.id == "prep_vehicle_step1" then
+                iconTex = self.texGear
+            elseif m.subIcon == "fuel" or m.id == "prep_vehicle_step2" then
+                iconTex = self.texFuel
+            elseif m.subIcon == "hq" or m.id == "prep_vehicle_step3" then
+                iconTex = self.texLogo or self.texGear
+            elseif m.type == "RADIO_CONTACT" or m.type == "RADIO_CRYPTO_FINAL" or m.category == "RADIO" then
                 iconTex = self.texMic
             elseif m.category == "HQ" then
                 iconTex = self.texLogo or self.texGear
@@ -314,16 +397,22 @@ function DamoclesMainWindow:prerender()
                 iconTex = (i == 1 and self.texFuel) or (i == 2 and self.texMic) or (i == 3 and self.texVial)
             end
 
+            local mCur = m.current or m.currentCount or 0
+            local mTgt = m.target or m.targetCount or 1
+            local mUnit = m.unit or ""
+            local isDoneStep = (m.status == "COMPLETED") or (mTgt > 0 and mCur >= mTgt)
+
             if iconTex then
                 self:drawTextureScaled(iconTex, 14, curY + 1, 20, 20, 1.0, 1.0, 1.0, 1.0)
             else
+                local iconBorderCol = isDoneStep and (self.cGreen or { r = 0.2, g = 0.95, b = 0.45 }) or { r = 0.0, g = 0.8, b = 1.0 }
                 self:drawRect(14, curY + 1, 20, 20, 0.6, 0.0, 0.3, 0.4)
-                self:drawRectBorder(14, curY + 1, 20, 20, 0.8, 0.0, 0.8, 1.0)
+                self:drawRectBorder(14, curY + 1, 20, 20, 0.8, iconBorderCol.r, iconBorderCol.g, iconBorderCol.b)
             end
 
             -- Titre mission
             local isRadioContact = (m.type == "RADIO_CONTACT" or m.type == "RADIO_CRYPTO_FINAL")
-            local titleCol = isRadioContact and self.cWarning or { r = 0.85, g = 0.95, b = 1.0 }
+            local titleCol = isRadioContact and self.cWarning or (isDoneStep and (self.cGreen or { r = 0.2, g = 0.95, b = 0.45 }) or { r = 0.85, g = 0.95, b = 1.0 })
             self:drawText(m.title, 38, curY - 1, titleCol.r, titleCol.g, titleCol.b, isRadioContact and pulse or 1.0, UIFont.Small)
 
             if m.extraData and m.extraData.isFoodAndWater then
@@ -351,17 +440,18 @@ function DamoclesMainWindow:prerender()
                 self:drawText(waterText, barX + barW + 8, barY2 - 3, self.cCyanText.r, self.cCyanText.g, self.cCyanText.b, 0.95, UIFont.Small)
             else
                 -- Compteur de progression securise standard
-                local mCur = m.current or m.currentCount or 0
-                local mTgt = m.target or m.targetCount or 1
-                local mUnit = m.unit or ""
-
                 local countText
                 if isRadioContact then
                     countText = "[!] LIAISON TERMINAL REQUISE"
+                elseif isDoneStep then
+                    countText = string.format("[OK] VALIDE%s", m.unit == "L" and " (3.0L)" or "")
+                elseif m.unit == "L" then
+                    countText = string.format("[%.1f/%.1f] %s", mCur, mTgt, mUnit)
                 else
                     countText = string.format("[%d/%d] %s", mCur, mTgt, mUnit)
                 end
-                self:drawText(countText, 38 + barW + 8, curY + 12, isRadioContact and self.cWarning.r or self.cSubText.r, isRadioContact and self.cWarning.g or self.cSubText.g, isRadioContact and self.cWarning.b or self.cSubText.b, 0.95, UIFont.Small)
+                local textCol = isRadioContact and self.cWarning or (isDoneStep and (self.cGreen or { r = 0.2, g = 0.95, b = 0.45 }) or self.cSubText)
+                self:drawText(countText, 38 + barW + 8, curY + 12, textCol.r, textCol.g, textCol.b, 0.95, UIFont.Small)
 
                 -- Mini barre de progression standard
                 local barX = 38
@@ -370,9 +460,11 @@ function DamoclesMainWindow:prerender()
 
                 self:drawRect(barX, barY, barW, barH, 0.85, 0.02, 0.08, 0.12)
                 if pct > 0 then
-                    self:drawRect(barX + 1, barY + 1, math.floor((barW - 2) * pct), barH - 2, 0.9, 0.0, 0.80, 0.95)
+                    local barCol = isDoneStep and (self.cGreen or { r = 0.2, g = 0.95, b = 0.45 }) or { r = 0.0, g = 0.80, b = 0.95 }
+                    self:drawRect(barX + 1, barY + 1, math.floor((barW - 2) * pct), barH - 2, 0.9, barCol.r, barCol.g, barCol.b)
                 end
-                self:drawRectBorder(barX, barY, barW, barH, 0.6, 0.0, 0.50, 0.65)
+                local borderCol = isDoneStep and (self.cGreen or { r = 0.2, g = 0.95, b = 0.45 }) or { r = 0.0, g = 0.50, b = 0.65 }
+                self:drawRectBorder(barX, barY, barW, barH, 0.6, borderCol.r, borderCol.g, borderCol.b)
             end
         end
     end

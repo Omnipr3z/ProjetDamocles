@@ -13,6 +13,7 @@
 
 require "DamoclesMissionDB"
 require "DamoclesGameTime"
+require "DamoclesMissionValidator"
 
 DamoclesMissionManager = DamoclesMissionManager or {}
 
@@ -388,462 +389,44 @@ function DamoclesMissionManager.findRadioTerminalInHQ()
     return nil
 end
 
---- Verifie si un ordinateur de bureau est installe sur une table dans le QG pour prep_computer
+-- =========================================================================
+-- Delegation de validation des missions (centralisee dans DamoclesMissionValidator)
+-- =========================================================================
+
 function DamoclesMissionManager.checkComputerInstalled(player)
-    local hqLoc = _state.hqLocation
-    local b = _state.hqBuilding
-    if not hqLoc and not b then return false end
-
-    local cell = getCell()
-    if not cell then return false end
-
-    local minX = b and b.minX or (hqLoc.x - 20)
-    local maxX = b and b.maxX or (hqLoc.x + 20)
-    local minY = b and b.minY or (hqLoc.y - 20)
-    local maxY = b and b.maxY or (hqLoc.y + 20)
-
-    for x = minX, maxX do
-        for y = minY, maxY do
-            local sq = cell:getGridSquare(x, y, 0)
-            if sq and DamoclesMissionManager.isTableSquare(sq) then
-                local objs = sq:getObjects()
-                if objs then
-                    for i = 0, objs:size() - 1 do
-                        local obj = objs:get(i)
-                        if obj then
-                            if obj.getModData and obj:getModData().isDamoclesComputer then
-                                return true
-                            end
-                            local sprite = obj.getSprite and obj:getSprite() and obj:getSprite():getName() or ""
-                            if sprite:find("appliances_com_01_7") or sprite:find("appliances_com_01_8") then
-                                if obj.getModData then obj:getModData().isDamoclesComputer = true end
-                                return true
-                            end
-                            local ft = obj.getFullType and obj:getFullType() or ""
-                            if ft:find("DesktopComputer") or ft:find("Computer") then
-                                if obj.getModData then obj:getModData().isDamoclesComputer = true end
-                                return true
-                            end
-                        end
-                    end
-                end
-            end
-        end
-    end
-
-    return false
+    return DamoclesMissionValidator.checkComputerInstalled(player)
 end
 
-
---- Verifie qu'aucun cadavre ne se trouve a l'interieur du batiment du QG
 function DamoclesMissionManager.areCorpsesCleanedInHQ()
-    if not _state.hqBuilding then return false end
-    local cell = getCell()
-    if not cell then return true end
-    local b = _state.hqBuilding
-    for x = b.minX, b.maxX do
-        for y = b.minY, b.maxY do
-            local sq = cell:getGridSquare(x, y, 0)
-            if sq and sq:getBuilding() then
-                local dead = sq:getDeadBodys()
-                if dead and dead:size() > 0 then
-                    return false
-                end
-            end
-        end
-    end
-    return true
+    return DamoclesMissionValidator.areCorpsesCleanedInHQ()
 end
 
---- Verifie si au moins un acces du QG (porte ou fenetre) est barricade
 function DamoclesMissionManager.isHQBarricaded()
-    if not _state.hqBuilding then return false end
-    local cell = getCell()
-    if not cell then return false end
-    local b = _state.hqBuilding
-    for x = b.minX, b.maxX do
-        for y = b.minY, b.maxY do
-            local sq = cell:getGridSquare(x, y, 0)
-            if sq then
-                local objs = sq:getObjects()
-                if objs then
-                    for i = 0, objs:size() - 1 do
-                        local obj = objs:get(i)
-                        if obj and obj.isBarricaded and obj:isBarricaded() then
-                            return true
-                        end
-                        if obj and obj.getBarricadeOnSameSquare and obj:getBarricadeOnSameSquare() then
-                            return true
-                        end
-                        if obj and obj.getBarricadeOnOppositeSquare and obj:getBarricadeOnOppositeSquare() then
-                            return true
-                        end
-                    end
-                end
-            end
-        end
-    end
-    return false
+    return DamoclesMissionValidator.isHQBarricaded()
 end
 
---- Verifie si un generateur connecte et pourvu en carburant alimente le QG
+function DamoclesMissionManager.checkSterileZone()
+    return DamoclesMissionValidator.checkSterileZone()
+end
+
 function DamoclesMissionManager.isHQPoweredByGenerator()
-    if not _state.hqBuilding or not _state.hqLocation then return false end
-    local cell = getCell()
-    if not cell then return false end
-    local genList = cell:getGeneratorList()
-    if genList then
-        for i = 0, genList:size() - 1 do
-            local gen = genList:get(i)
-            if gen and gen:isConnected() and gen:getFuel() > 0 then
-                local dx = gen:getX() - _state.hqLocation.x
-                local dy = gen:getY() - _state.hqLocation.y
-                local dist = math.sqrt(dx * dx + dy * dy)
-                if dist <= 35 or DamoclesMissionManager.isInsideHQ(gen:getX(), gen:getY(), gen:getZ()) then
-                    return true
-                end
-            end
-        end
-    end
-    return false
+    return DamoclesMissionValidator.isHQPoweredByGenerator()
 end
 
---- Verifie si le joueur possede les items requis pour une mission HOLD_ITEMS
 function DamoclesMissionManager.checkHoldItems(player, mission)
-    if not player or not mission or not mission.requiredItems then return false end
-    local inv = player:getInventory()
-    if not inv then return false end
-    for _, itemType in ipairs(mission.requiredItems) do
-        local count = inv:getItemCount(itemType)
-        if count < (mission.targetCount or 1) then
-            return false
-        end
-    end
-    return true
+    return DamoclesMissionValidator.checkHoldItems(player, mission)
 end
 
---- Verifie si le QG dispose de conserves/vivres non-perissables et de contenants d'eau/boissons
---- Ne prend en compte STRICTEMENT que les vivres stockes dans les conteneurs du QG.
---- @param player IsoPlayer
---- @param reqFood number (defaut: 20)
---- @param reqWater number (defaut: 4)
---- @return boolean isComplete, number foodCount, number waterCount
 function DamoclesMissionManager.checkFoodSupplies(player, reqFood, reqWater)
-    local targetFood = reqFood or 20
-    local targetWater = reqWater or 4
-    local foodCount = 0
-    local waterCount = 0
-
-    local function isNonPerishableFood(it)
-        if not it then return false end
-
-        -- Verification que l'objet est bien de type nourriture
-        local isFood = false
-        if it.IsFood and it:IsFood() then isFood = true end
-        if not isFood and it.getCategory and it:getCategory() == "Food" then isFood = true end
-        if not isFood and (it.getHungerChange and it:getHungerChange() < 0) then isFood = true end
-        if not isFood then return false end
-
-        -- Exclusion formelle des aliments pourris ou brules
-        if it.isRotten and it:isRotten() then return false end
-        if it.isBurnt and it:isBurnt() then return false end
-
-        local ft = (it.getFullType and it:getFullType()) or ""
-        local t = (it.getType and it:getType()) or ""
-        local name = (it.getName and it:getName()) or ""
-        local dName = (it.getDisplayName and it:getDisplayName()) or ""
-
-        -- Exclusion des boites/bocaux vides
-        if t:find("Empty") or ft:find("Empty") or name:find("Empty") or dName:find("Empty")
-           or name:find("vide") or dName:find("vide") then
-            return false
-        end
-
-        -- 1. Proprietes natives du moteur PZ pour les aliments non-perissables
-        if it.getOffAge and it:getOffAge() and it:getOffAge() >= 100000 then
-            return true
-        end
-        if it.getOffAgeMax and it:getOffAgeMax() and it:getOffAgeMax() >= 100000 then
-            return true
-        end
-        if it.isCanned and it:isCanned() then
-            return true
-        end
-
-        -- 2. Compatibilite directe avec le mod Project France (conserve, bocaux, plats cuisines en boite)
-        if ft:find("ProjectFrance.") then
-            -- Seuls les produits de boulangerie fraiche du mod sont perissables
-            if not t:find("Baguette") and not t:find("Croissant") and not t:find("PainChocolat") then
-                return true
-            end
-        end
-
-        -- 3. Reconnaissance par mots-cles universels (Vanilla, Project France, mods de survie)
-        local checkStr = (t .. " " .. ft .. " " .. name .. " " .. dName):lower()
-        local keywords = {
-            -- Conserves, conserves ouvertes et rations militaires
-            "canned", "tinned", "tin", "ration", "mre", "beans", "soup", "tuna",
-            "cornedbeef", "sardine", "salmon", "chili", "bolognese", "evaporatedmilk", "spam",
-            -- Bocaux, terrines, pates et confits (France et terroir)
-            "bocal", "bocaux", "jar", "terrine", "pate", "confit", "rillettes", "foiegras",
-            "confiture", "jam", "marmalade", "pickle", "pickled", "conserve",
-            -- Biscuits, crackers, chips et aperitifs non perissables
-            "biscuit", "cookie", "cracker", "crisps", "chips", "pretzel", "popcorn", "snack",
-            -- Chocolats, barres energiques et sucreries
-            "chocolate", "choc", "candy", "candies", "gummy", "lollipop", "marshmallow", "bonbon",
-            "snickers", "mars",
-            -- Feculents et cereales seches
-            "cereal", "oats", "oatmeal", "pasta", "macaroni", "rice", "ramen", "noodles",
-            "peanutbutter", "beefjerky", "jerky",
-            -- Plats traditionnels Project France
-            "tartiflette", "boeufbourguignon", "blanquette", "bouillabaisse", "grabure",
-            "andouillette", "confitdecanard", "piperade", "daube", "cassoulet", "ratatouille",
-            "axoa", "choucroute", "moules", "petitsale"
-        }
-
-        for _, kw in ipairs(keywords) do
-            if checkStr:find(kw) then
-                return true
-            end
-        end
-
-        return false
-    end
-
-    local function isWaterSupply(it)
-        if not it then return false end
-        -- 1. Source d'eau (bouteille, marmite, seau, gourde vanilla ou mod)
-        if it.isWaterSource and it:isWaterSource() then
-            if it.getUsedDelta and it:getUsedDelta() <= 0 then
-                return false
-            end
-            return true
-        end
-        -- 2. Consommables hydratants (jus, sodas, biere, cidre, boissons)
-        if it.getThirstChange and it:getThirstChange() < -0.05 then
-            return true
-        end
-        -- 3. Reconnaissance par mots-cles de boissons non vides
-        local t = (it.getType and it:getType()) or ""
-        local ft = (it.getFullType and it:getFullType()) or ""
-        local name = (it.getName and it:getName()) or ""
-        local checkStr = (t .. " " .. ft .. " " .. name):lower()
-        if checkStr:find("water") or checkStr:find("pop") or checkStr:find("soda")
-           or checkStr:find("juice") or checkStr:find("beer") or checkStr:find("wine")
-           or checkStr:find("drink") or checkStr:find("cider") or checkStr:find("cidre")
-           or checkStr:find("whiskey") or checkStr:find("bourbon") or checkStr:find("limonade")
-           or checkStr:find("sirop") or checkStr:find("eau") then
-            if not checkStr:find("empty") and not checkStr:find("vide") then
-                return true
-            end
-        end
-        return false
-    end
-
-    local function scanContainer(cont)
-        if not cont then return end
-        local items = cont:getItems()
-        if not items then return end
-        for i = 0, items:size() - 1 do
-            local it = items:get(i)
-            if it then
-                if isNonPerishableFood(it) then
-                    foodCount = foodCount + 1
-                elseif isWaterSupply(it) then
-                    waterCount = waterCount + 1
-                end
-                -- Scan recursif si l'item stocke lui-meme des objets (sac, glaciere rangee dans un conteneur)
-                if it.getItemContainer and it:getItemContainer() then
-                    scanContainer(it:getItemContainer())
-                end
-            end
-        end
-    end
-
-    -- SCAN EXCLUSIF DES CONTENEURS DU QG (L'inventaire du joueur n'est PAS pris en compte)
-    local b = _state.hqBuilding
-    if not b and _state.hqLocation then
-        b = {
-            minX = _state.hqLocation.x - 15,
-            maxX = _state.hqLocation.x + 15,
-            minY = _state.hqLocation.y - 15,
-            maxY = _state.hqLocation.y + 15,
-        }
-    end
-
-    if b then
-        local cell = getCell()
-        if cell then
-            for z = 0, 7 do
-                for x = b.minX, b.maxX do
-                    for y = b.minY, b.maxY do
-                        local sq = cell:getGridSquare(x, y, z)
-                        if sq then
-                            local objs = sq:getObjects()
-                            if objs then
-                                for o = 0, objs:size() - 1 do
-                                    local obj = objs:get(o)
-                                    if obj then
-                                        local count = (obj.getContainerCount and obj:getContainerCount()) or 0
-                                        if count > 0 then
-                                            for cIdx = 0, count - 1 do
-                                                scanContainer(obj:getContainerByIndex(cIdx))
-                                            end
-                                        elseif obj.getContainer and obj:getContainer() then
-                                            scanContainer(obj:getContainer())
-                                        end
-                                    end
-                                end
-                            end
-                        end
-                    end
-                end
-            end
-        end
-    end
-
-    local isComplete = (foodCount >= targetFood) and (waterCount >= targetWater)
-    return isComplete, foodCount, waterCount
+    return DamoclesMissionValidator.checkFoodSupplies(player, reqFood, reqWater)
 end
 
---- Verifie les 3 etapes d'acquisition d'un vehicule tactique :
---- 1. Moteur demarre (controle pris)
---- 2. Niveau de carburant min. (>= 3L)
---- 3. Rapatrie a proximite du QG (<= 35 cases)
---- @return boolean isComplete, number completedSteps
 function DamoclesMissionManager.checkVehicleSecured(player)
-    local bestSteps = 0
-    local isComplete = false
-
-    local hq = _state.hqLocation
-    local cell = getCell()
-
-    -- Fonction d'evaluation d'un vehicule donne
-    local function evaluateVehicle(veh)
-        if not veh or not veh.getX or not veh.getY then return false, 0 end
-
-        -- Etape 1 : Demarrage du moteur
-        local isRunning = false
-        pcall(function()
-            if veh.isEngineRunning and veh:isEngineRunning() then
-                isRunning = true
-                veh:getModData().damoclesEngineStarted = true
-            elseif veh.isEngineStarted and veh:isEngineStarted() then
-                isRunning = true
-                veh:getModData().damoclesEngineStarted = true
-            end
-        end)
-
-        local step1 = false
-        pcall(function()
-            if isRunning or (veh:getModData() and veh:getModData().damoclesEngineStarted) then
-                step1 = true
-            end
-        end)
-
-        -- Etape 2 : Carburant suffisant (>= 3.0L)
-        local step2 = false
-        pcall(function()
-            local tank = veh.getPartById and veh:getPartById("GasTank")
-            if tank and tank.getContainerContentAmount and tank:getContainerContentAmount() >= 3.0 then
-                step2 = true
-            end
-        end)
-
-        -- Etape 3 : Proximite QG (<= 35 cases)
-        local step3 = false
-        if hq and hq.x and hq.y then
-            local dx = veh:getX() - hq.x
-            local dy = veh:getY() - hq.y
-            if (dx * dx + dy * dy) <= 1225 then -- 35 cases
-                step3 = true
-            end
-        end
-
-        local count = (step1 and 1 or 0) + (step2 and 1 or 0) + (step3 and 1 or 0)
-        return (step1 and step2 and step3), count
-    end
-
-    -- 1. Si le joueur est actuellement a bord d'un vehicule
-    if player and player.getVehicle and player:getVehicle() then
-        local ok, cnt = evaluateVehicle(player:getVehicle())
-        if cnt > bestSteps then bestSteps = cnt end
-        if ok then isComplete = true end
-    end
-
-    -- 2. Scanner les vehicules dans la cellule (notamment stationnes pres du QG)
-    if cell and cell.getVehicles then
-        local okList, vehList = pcall(function() return cell:getVehicles() end)
-        if okList and vehList and vehList.size then
-            for i = 0, vehList:size() - 1 do
-                local veh = vehList:get(i)
-                local ok, cnt = evaluateVehicle(veh)
-                if cnt > bestSteps then bestSteps = cnt end
-                if ok then
-                    isComplete = true
-                    bestSteps = 3
-                    break
-                end
-            end
-        end
-    end
-
-    return isComplete, bestSteps
+    return DamoclesMissionValidator.checkVehicleSecured(player)
 end
 
---- Verifie si un generateur et du carburant sont acquis (sur le joueur ou au QG)
 function DamoclesMissionManager.checkGeneratorAcquired(player)
-    local hasGen = false
-    local hasFuel = false
-
-    -- 1. Verifier inventaire joueur
-    if player then
-        local inv = player:getInventory()
-        if inv then
-            if inv:containsTypeRec("Base.Generator") or inv:containsTypeRec("Generator") then
-                hasGen = true
-            end
-            local cans = inv:getItemsFromType("Base.PetrolCan")
-            if cans and cans:size() > 0 then
-                for i = 0, cans:size() - 1 do
-                    local can = cans:get(i)
-                    if can and can:getUsedDelta() > 0 then
-                        hasFuel = true
-                        break
-                    end
-                end
-            end
-            local primary = player:getPrimaryHandItem()
-            local secondary = player:getSecondaryHandItem()
-            if (primary and primary:getType() == "Generator") or (secondary and secondary:getType() == "Generator") then
-                hasGen = true
-            end
-        end
-    end
-
-    -- 2. Verifier objets poses ou dans le perimetre du QG
-    local cell = getCell()
-    if cell and _state.hqLocation then
-        local genList = cell:getGeneratorList()
-        if genList and genList:size() > 0 then
-            for i = 0, genList:size() - 1 do
-                local g = genList:get(i)
-                if g then
-                    local dx = g:getX() - _state.hqLocation.x
-                    local dy = g:getY() - _state.hqLocation.y
-                    if (dx * dx + dy * dy) <= 1600 then
-                        hasGen = true
-                        if g:getFuel() > 0 then
-                            hasFuel = true
-                        end
-                        break
-                    end
-                end
-            end
-        end
-    end
-
-    return hasGen and hasFuel
+    return DamoclesMissionValidator.checkGeneratorAcquired(player)
 end
 
 -- =========================================================================
